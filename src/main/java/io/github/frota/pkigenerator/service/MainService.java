@@ -4,6 +4,7 @@ import com.github.slugify.Slugify;
 import io.github.frota.pkigenerator.model.CARequest;
 import io.github.frota.pkigenerator.model.ICPBrasilCNPJRequest;
 import io.github.frota.pkigenerator.model.ICPBrasilCPFRequest;
+import io.github.frota.pkigenerator.model.IssuerMaterial;
 import io.github.frota.pkigenerator.model.WebsiteRequest;
 import io.github.frota.pkigenerator.util.AppConstants;
 import io.github.frota.pkigenerator.util.CertificateTypeEnum;
@@ -18,6 +19,7 @@ import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -48,8 +50,7 @@ public class MainService {
 		
 		boolean isRoot = StringUtils.isEmpty(issuer);
 		
-		X509Certificate issuerCertificate = null;
-		KeyPair issuerKeyPair = null;
+		IssuerMaterial issuerMaterial = null;
 		if (!isRoot) {
 			Path pathIssuer = Paths.get(
 					installFolder.toString(),
@@ -60,17 +61,7 @@ public class MainService {
 			if (Files.notExists(pathIssuer))
 				throw new RuntimeException("File " + pathIssuer + " doesn't exist.");
 			
-			KeyStore keyStore = KeyStore.getInstance("PKCS12");
-			try (InputStream is = Files.newInputStream(pathIssuer)) {
-				keyStore.load(is, CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-			}
-			
-			PrivateKey issuerPrivateKey = (PrivateKey) keyStore.getKey(
-					CertificateService.KEYSTORE_DEFAULT_ALIAS,
-					CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-			
-			issuerCertificate = (X509Certificate) keyStore.getCertificate(CertificateService.KEYSTORE_DEFAULT_ALIAS);
-			issuerKeyPair = new KeyPair(issuerCertificate.getPublicKey(), issuerPrivateKey);
+			issuerMaterial = loadIssuerMaterial(pathIssuer);
 		}
 		
 		Path pathBase = Paths.get(installFolder.toString(), isRoot ? AppConstants.ROOT_CA_FOLDER : AppConstants.INTERMEDIATE_CA_FOLDER);
@@ -93,17 +84,21 @@ public class MainService {
 					.organizationalUnit("EXAMPLE")
 					.commonName(commonName)
 					.expirationYears(20)
-					.notAfter((!isRoot) ? issuerCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
+					.notAfter((!isRoot) ? issuerMaterial.issuerCertificate().getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime() : null)
 					.cpsPointerUri("http://example.com/cpsPointerUri.pdf")
 					.crlDistributionPointUri("http://example.com/crlDistributionPointUri.crl")
 					.build();
 		
 		X509Certificate certificate = certificateService.createCertificateAuthority(
 				keyPair,
-				(!isRoot) ? issuerKeyPair : keyPair,
-				(!isRoot) ? issuerCertificate.getSubjectX500Principal() : null,
+				(!isRoot) ? issuerMaterial.issuerKeyPair() : keyPair,
+				(!isRoot) ? issuerMaterial.issuerCertificate().getSubjectX500Principal() : null,
 				requestRoot);
-		certificateService.saveCertificateToFile(certificate, keyPair, pathFile);
+		
+		Certificate[] chain = isRoot
+				? new Certificate[] { certificate }
+				: prependCertificate(certificate, issuerMaterial.issuerChain());
+		certificateService.saveCertificateToFile(chain, keyPair, pathFile);
 		
 		log.info("{} CA '{}' created successfully.", isRoot ? "Root" : "Intermediate", commonName);
 	}
@@ -124,17 +119,7 @@ public class MainService {
 		if (Files.notExists(pathIssuer))
 			throw new RuntimeException("File " + pathIssuer + " doesn't exist.");
 		
-		KeyStore keyStore = KeyStore.getInstance("PKCS12");
-		try (InputStream is = Files.newInputStream(pathIssuer)) {
-			keyStore.load(is, CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		}
-		
-		PrivateKey issuerPrivateKey = (PrivateKey) keyStore.getKey(
-				CertificateService.KEYSTORE_DEFAULT_ALIAS,
-				CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		
-		X509Certificate issuerCertificate = (X509Certificate) keyStore.getCertificate(CertificateService.KEYSTORE_DEFAULT_ALIAS); // root or intermediate
-		KeyPair issuerKeyPair = new KeyPair(issuerCertificate.getPublicKey(), issuerPrivateKey);
+		IssuerMaterial issuerMaterial = loadIssuerMaterial(pathIssuer);
 		
 		Path pathBase = Paths.get(installFolder.toString(), AppConstants.ICP_CNPJ_FOLDER);
 		Files.createDirectories(pathBase);
@@ -158,15 +143,15 @@ public class MainService {
 				.cpfResponsavel(personCpf)
 				.dataNascimentoResponsavel(LocalDate.of(1990, 1, 1))
 				.certificateTypeEnum(certType)
-				.notAfter(issuerCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
+				.notAfter(issuerMaterial.issuerCertificate().getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
 				.build();
 		
 		X509Certificate certificate = certificateService.createIcpBrasilCNPJ(
 				keyPair,
-				issuerKeyPair,
-				issuerCertificate.getSubjectX500Principal(),
+				issuerMaterial.issuerKeyPair(),
+				issuerMaterial.issuerCertificate().getSubjectX500Principal(),
 				requestIcpCnpj);
-		certificateService.saveCertificateToFile(certificate, keyPair, pathFile);
+		certificateService.saveCertificateToFile(prependCertificate(certificate, issuerMaterial.issuerChain()), keyPair, pathFile);
 		
 		log.info("ICP-Brasil certificate created successfully for CNPJ '{}'.", requestIcpCnpj.getCnpj());
 	}
@@ -186,17 +171,7 @@ public class MainService {
 		if (Files.notExists(pathIssuer))
 			throw new RuntimeException("File " + pathIssuer + " doesn't exist.");
 		
-		KeyStore keyStore = KeyStore.getInstance("PKCS12");
-		try (InputStream is = Files.newInputStream(pathIssuer)) {
-			keyStore.load(is, CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		}
-		
-		PrivateKey issuerPrivateKey = (PrivateKey) keyStore.getKey(
-				CertificateService.KEYSTORE_DEFAULT_ALIAS,
-				CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		
-		X509Certificate issuerCertificate = (X509Certificate) keyStore.getCertificate(CertificateService.KEYSTORE_DEFAULT_ALIAS); // root or intermediate
-		KeyPair issuerKeyPair = new KeyPair(issuerCertificate.getPublicKey(), issuerPrivateKey);
+		IssuerMaterial issuerMaterial = loadIssuerMaterial(pathIssuer);
 		
 		Path pathBase = Paths.get(installFolder.toString(), AppConstants.ICP_CPF_FOLDER);
 		Files.createDirectories(pathBase);
@@ -218,15 +193,15 @@ public class MainService {
 				.email(email)
 				.dataNascimento(LocalDate.of(1990, 1, 1))
 				.certificateTypeEnum(certType)
-				.notAfter(issuerCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
+				.notAfter(issuerMaterial.issuerCertificate().getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
 				.build();
 		
 		X509Certificate certificate = certificateService.createIcpBrasilCPF(
 				keyPair,
-				issuerKeyPair,
-				issuerCertificate.getSubjectX500Principal(),
+				issuerMaterial.issuerKeyPair(),
+				issuerMaterial.issuerCertificate().getSubjectX500Principal(),
 				requestIcpCpf);
-		certificateService.saveCertificateToFile(certificate, keyPair, pathFile);
+		certificateService.saveCertificateToFile(prependCertificate(certificate, issuerMaterial.issuerChain()), keyPair, pathFile);
 		
 		log.info("ICP-Brasil certificate created successfully for CPF '{}'.", requestIcpCpf.getCpf());
 	}
@@ -246,17 +221,7 @@ public class MainService {
 		if (Files.notExists(pathIssuer))
 			throw new RuntimeException("File " + pathIssuer + " doesn't exist.");
 		
-		KeyStore keyStore = KeyStore.getInstance("PKCS12");
-		try (InputStream is = Files.newInputStream(pathIssuer)) {
-			keyStore.load(is, CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		}
-		
-		PrivateKey issuerPrivateKey = (PrivateKey) keyStore.getKey(
-				CertificateService.KEYSTORE_DEFAULT_ALIAS,
-				CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
-		
-		X509Certificate issuerCertificate = (X509Certificate) keyStore.getCertificate(CertificateService.KEYSTORE_DEFAULT_ALIAS); // root or intermediate
-		KeyPair issuerKeyPair = new KeyPair(issuerCertificate.getPublicKey(), issuerPrivateKey);
+		IssuerMaterial issuerMaterial = loadIssuerMaterial(pathIssuer);
 		
 		Path pathBase = Paths.get(installFolder.toString(), AppConstants.WEBSITE_FOLDER);
 		Files.createDirectories(pathBase);
@@ -276,17 +241,57 @@ public class MainService {
 				.commonName(commonName)
 				.dnsNames(dnsNames != null ? new HashSet<>(dnsNames) : new HashSet<>())
 				.ipAddresses(ipAddresses != null ? new HashSet<>(ipAddresses) : new HashSet<>())
-				.notAfter(issuerCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
+				.notAfter(issuerMaterial.issuerCertificate().getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime())
 				.build();
 		
 		X509Certificate certificate = certificateService.createWebsiteCertificate(
 				keyPair,
-				issuerKeyPair,
-				issuerCertificate.getSubjectX500Principal(),
+				issuerMaterial.issuerKeyPair(),
+				issuerMaterial.issuerCertificate().getSubjectX500Principal(),
 				requestWebsite);
-		certificateService.saveCertificateToFile(certificate, keyPair, pathFile);
+		certificateService.saveCertificateToFile(prependCertificate(certificate, issuerMaterial.issuerChain()), keyPair, pathFile);
 		
 		log.info("Website certificate created successfully for '{}'.", commonName);
+	}
+	
+	private IssuerMaterial loadIssuerMaterial(Path pathIssuer) throws Exception {
+		KeyStore keyStore = KeyStore.getInstance("PKCS12");
+		try (InputStream is = Files.newInputStream(pathIssuer)) {
+			keyStore.load(is, CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
+		}
+		
+		PrivateKey issuerPrivateKey = (PrivateKey) keyStore.getKey(
+				CertificateService.KEYSTORE_DEFAULT_ALIAS,
+				CertificateService.CACERTS_DEFAULT_PWD.toCharArray());
+		if (issuerPrivateKey == null) {
+			throw new RuntimeException("Private key not found in " + pathIssuer);
+		}
+		
+		Certificate[] rawChain = keyStore.getCertificateChain(CertificateService.KEYSTORE_DEFAULT_ALIAS);
+		X509Certificate[] issuerChain;
+		if (rawChain == null || rawChain.length == 0) {
+			X509Certificate issuerCertificate = (X509Certificate) keyStore.getCertificate(CertificateService.KEYSTORE_DEFAULT_ALIAS);
+			if (issuerCertificate == null) {
+				throw new RuntimeException("Certificate not found in " + pathIssuer);
+			}
+			issuerChain = new X509Certificate[] { issuerCertificate };
+		} else {
+			issuerChain = new X509Certificate[rawChain.length];
+			for (int i = 0; i < rawChain.length; i++) {
+				issuerChain[i] = (X509Certificate) rawChain[i];
+			}
+		}
+		
+		X509Certificate issuerCertificate = issuerChain[0];
+		KeyPair issuerKeyPair = new KeyPair(issuerCertificate.getPublicKey(), issuerPrivateKey);
+		return new IssuerMaterial(issuerCertificate, issuerKeyPair, issuerChain);
+	}
+	
+	private Certificate[] prependCertificate(X509Certificate certificate, X509Certificate[] issuerChain) {
+		Certificate[] chain = new Certificate[issuerChain.length + 1];
+		chain[0] = certificate;
+		System.arraycopy(issuerChain, 0, chain, 1, issuerChain.length);
+		return chain;
 	}
 
 }

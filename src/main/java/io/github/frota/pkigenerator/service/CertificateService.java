@@ -416,11 +416,11 @@ public class CertificateService {
 		return converter.getCertificate(certBuilder.build(signer));
 	}
 	
-	public void saveCertificateToFile(X509Certificate certificate, KeyPair keyPair, Path output)
+	public void saveCertificateToFile(Certificate[] chain, KeyPair keyPair, Path output)
 			throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
 		KeyStore keyStore = KeyStore.getInstance("PKCS12");
 		keyStore.load(null, null);
-		keyStore.setKeyEntry(KEYSTORE_DEFAULT_ALIAS, keyPair.getPrivate(), CACERTS_DEFAULT_PWD.toCharArray(), new Certificate[] { certificate });
+		keyStore.setKeyEntry(KEYSTORE_DEFAULT_ALIAS, keyPair.getPrivate(), CACERTS_DEFAULT_PWD.toCharArray(), chain);
 		try (OutputStream os = Files.newOutputStream(output)) {
 			keyStore.store(os, CACERTS_DEFAULT_PWD.toCharArray());
 		}
