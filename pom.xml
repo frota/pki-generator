@@ -15,12 +15,12 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		
 		<slf4j-simple.version>2.0.17</slf4j-simple.version>
-		<bouncycastle.version>1.80</bouncycastle.version>
-		<lombok.version>1.18.38</lombok.version>
-		<commons-lang3.version>3.17.0</commons-lang3.version>
+		<bouncycastle.version>1.84</bouncycastle.version>
+		<lombok.version>1.18.46</lombok.version>
+		<commons-lang3.version>3.20.0</commons-lang3.version>
 		<picocli.version>4.7.7</picocli.version>
 		<slugify.version>3.0.7</slugify.version>
-		<commons-validator.version>1.10.0</commons-validator.version>
+		<commons-validator.version>1.10.1</commons-validator.version>
 	</properties>
 	
 	<dependencies>

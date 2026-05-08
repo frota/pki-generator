@@ -17,7 +17,8 @@ import java.util.concurrent.Callable;
 		CACommand.class,
 		IcpCnpjCommand.class,
 		IcpCpfCommand.class,
-		WebsiteCommand.class
+		WebsiteCommand.class,
+		CloneCommand.class,
 	})
 public class PKIGenerator implements Callable<Integer> {
 

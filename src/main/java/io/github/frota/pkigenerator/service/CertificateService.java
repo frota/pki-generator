@@ -38,7 +38,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 public class CertificateService {
 
@@ -416,6 +419,46 @@ public class CertificateService {
 		return converter.getCertificate(certBuilder.build(signer));
 	}
 	
+	public X509Certificate createClonedCertificate(X509Certificate sourceCertificate, KeyPair keyPair, KeyPair singerKeyPair,
+			X500Principal issuer, LocalDateTime issuerNotAfter)
+			throws IOException, NoSuchAlgorithmException, OperatorCreationException, CertificateException {
+		LocalDateTime sourceNotBefore = sourceCertificate.getNotBefore().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+		LocalDateTime notBefore = sourceNotBefore;
+		LocalDateTime sourceNotAfter = sourceCertificate.getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+		LocalDateTime notAfter = sourceNotAfter;
+		
+		if (issuerNotAfter != null && issuerNotAfter.isBefore(notAfter)) {
+			notAfter = issuerNotAfter;
+		}
+		
+//		if (!notAfter.isAfter(notBefore)) {
+//			throw new CertificateException("Source certificate or issuer certificate is already expired.");
+//		}
+		
+		X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+				issuer,
+				generatePositiveSerialNumber(),
+				Date.from(notBefore.atZone(ZoneId.systemDefault()).toInstant()),
+				Date.from(notAfter.atZone(ZoneId.systemDefault()).toInstant()),
+				sourceCertificate.getSubjectX500Principal(),
+				keyPair.getPublic());
+		
+		copyCloneableExtensions(sourceCertificate, certBuilder);
+		
+		JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
+		certBuilder
+				.addExtension(Extension.authorityKeyIdentifier, false, extUtils.createAuthorityKeyIdentifier(singerKeyPair.getPublic()))
+				.addExtension(Extension.subjectKeyIdentifier, false, extUtils.createSubjectKeyIdentifier(keyPair.getPublic()));
+		
+		ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
+				.setProvider(BC_PROVIDER)
+				.build(singerKeyPair.getPrivate());
+		
+		JcaX509CertificateConverter converter = new JcaX509CertificateConverter()
+				.setProvider(BC_PROVIDER);
+		return converter.getCertificate(certBuilder.build(signer));
+	}
+	
 	public void saveCertificateToFile(Certificate[] chain, KeyPair keyPair, Path output)
 			throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
 		KeyStore keyStore = KeyStore.getInstance("PKCS12");
@@ -442,6 +485,44 @@ public class CertificateService {
 		} catch (Exception ex) {
 			throw new IllegalStateException(ex);
 		}
+	}
+	
+	private void copyCloneableExtensions(X509Certificate sourceCertificate, X509v3CertificateBuilder certBuilder) throws IOException {
+		Set<String> criticalExtensionOids = nullToEmpty(sourceCertificate.getCriticalExtensionOIDs());
+		Set<String> nonCriticalExtensionOids = nullToEmpty(sourceCertificate.getNonCriticalExtensionOIDs());
+		Set<String> extensionOids = new HashSet<>();
+		extensionOids.addAll(criticalExtensionOids);
+		extensionOids.addAll(nonCriticalExtensionOids);
+		
+		for (String oid : extensionOids) {
+			if (isRegeneratedExtension(oid)) {
+				continue;
+			}
+			
+			byte[] extensionValue = sourceCertificate.getExtensionValue(oid);
+			if (extensionValue == null) {
+				continue;
+			}
+			
+			ASN1OctetString octets = ASN1OctetString.getInstance(ASN1Primitive.fromByteArray(extensionValue));
+			certBuilder.addExtension(
+					new ASN1ObjectIdentifier(oid),
+					criticalExtensionOids.contains(oid),
+					octets.getOctets());
+		}
+	}
+	
+	private Set<String> nullToEmpty(Collection<String> values) {
+		return values == null ? Set.of() : new HashSet<>(values);
+	}
+	
+	private boolean isRegeneratedExtension(String oid) {
+		return Extension.authorityKeyIdentifier.getId().equals(oid)
+				|| Extension.subjectKeyIdentifier.getId().equals(oid);
+	}
+	
+	private BigInteger generatePositiveSerialNumber() {
+		return new BigInteger(159, new SecureRandom()).setBit(159);
 	}
 
 }

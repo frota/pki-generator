@@ -14,7 +14,7 @@ import java.util.concurrent.Callable;
 @CommandLine.Command(name="website", description="Generate or manage a certificate for a website.")
 public class WebsiteCommand implements Callable<Integer> {
 
-	private static final Logger log = LoggerFactory.getLogger(IcpCpfCommand.class);
+	private static final Logger log = LoggerFactory.getLogger(WebsiteCommand.class);
 	
 	@CommandLine.ParentCommand
 	private PKIGenerator parentCommand;

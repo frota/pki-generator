@@ -10,6 +10,7 @@ public final class AppConstants {
 	public static final String WEBSITE_FOLDER =         "2_website";
 	public static final String ICP_CPF_FOLDER =         "3_icp_cpf";
 	public static final String ICP_CNPJ_FOLDER =        "4_icp_cnpj";
+	public static final String CLONED_FOLDER =          "5_cloned";
 	
 	public static final String DEFAULT_OUTPUT_FOLDER = ".pki-generator";
 	

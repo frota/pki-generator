@@ -20,11 +20,14 @@ import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
+import javax.naming.ldap.LdapName;
+import javax.naming.ldap.Rdn;
 
 public class MainService {
 
@@ -254,6 +257,55 @@ public class MainService {
 		log.info("Website certificate created successfully for '{}'.", commonName);
 	}
 	
+	public void cloneCertificate(Path sourceCertificatePath, String issuer, boolean isRoot, String name) throws Exception {
+		X509Certificate sourceCertificate = loadCertificate(sourceCertificatePath);
+		
+		String outputName = StringUtils.defaultIfBlank(name, getCommonName(sourceCertificate));
+		if (StringUtils.isBlank(outputName)) {
+			outputName = "serial_" + sourceCertificate.getSerialNumber().toString(16);
+		}
+		
+		String outputFolder = Slugify.builder()
+				.underscoreSeparator(true)
+				.build()
+				.slugify("clone_" + outputName);
+		
+		Path pathIssuer = Paths.get(
+				installFolder.toString(),
+				isRoot ? AppConstants.ROOT_CA_FOLDER : AppConstants.INTERMEDIATE_CA_FOLDER,
+				issuer,
+				issuer + ".p12");
+		
+		if (Files.notExists(pathIssuer))
+			throw new RuntimeException("File " + pathIssuer + " doesn't exist.");
+		
+		IssuerMaterial issuerMaterial = loadIssuerMaterial(pathIssuer);
+		
+		Path pathBase = Paths.get(installFolder.toString(), AppConstants.CLONED_FOLDER);
+		Files.createDirectories(pathBase);
+		
+		Path pathFile = pathBase
+				.resolve(outputFolder)
+				.resolve(outputFolder + ".p12");
+		
+		if (Files.exists(pathFile))
+			throw new RuntimeException("File " + pathFile + " already exists.");
+		
+		Files.createDirectories(pathFile.getParent());
+		
+		KeyPair keyPair = certificateService.generateKeyPair2048();
+		
+		X509Certificate certificate = certificateService.createClonedCertificate(
+				sourceCertificate,
+				keyPair,
+				issuerMaterial.issuerKeyPair(),
+				issuerMaterial.issuerCertificate().getSubjectX500Principal(),
+				issuerMaterial.issuerCertificate().getNotAfter().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+		certificateService.saveCertificateToFile(prependCertificate(certificate, issuerMaterial.issuerChain()), keyPair, pathFile);
+		
+		log.info("Certificate cloned successfully from '{}' to '{}'.", sourceCertificatePath, pathFile);
+	}
+	
 	private IssuerMaterial loadIssuerMaterial(Path pathIssuer) throws Exception {
 		KeyStore keyStore = KeyStore.getInstance("PKCS12");
 		try (InputStream is = Files.newInputStream(pathIssuer)) {
@@ -292,6 +344,27 @@ public class MainService {
 		chain[0] = certificate;
 		System.arraycopy(issuerChain, 0, chain, 1, issuerChain.length);
 		return chain;
+	}
+	
+	private X509Certificate loadCertificate(Path sourceCertificatePath) throws Exception {
+		CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+		try (InputStream is = Files.newInputStream(sourceCertificatePath)) {
+			return (X509Certificate) certificateFactory.generateCertificate(is);
+		}
+	}
+	
+	private String getCommonName(X509Certificate certificate) {
+		try {
+			LdapName ldapName = new LdapName(certificate.getSubjectX500Principal().getName());
+			for (Rdn rdn : ldapName.getRdns()) {
+				if ("CN".equalsIgnoreCase(rdn.getType())) {
+					return rdn.getValue().toString();
+				}
+			}
+		} catch (Exception ex) {
+			log.warn("Could not extract common name from source certificate subject.", ex);
+		}
+		return null;
 	}
 
 }
