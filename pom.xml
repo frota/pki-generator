@@ -21,6 +21,7 @@
 		<picocli.version>4.7.7</picocli.version>
 		<slugify.version>3.0.7</slugify.version>
 		<commons-validator.version>1.10.1</commons-validator.version>
+		<junit-jupiter.version>5.14.1</junit-jupiter.version>
 	</properties>
 	
 	<dependencies>
@@ -60,6 +61,12 @@
 			<artifactId>commons-validator</artifactId>
 			<version>${commons-validator.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit-jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 	
 	<build>
@@ -80,6 +87,10 @@
 				<configuration>
 					<encoding>UTF-8</encoding>
 				</configuration>
+			</plugin>
+			<plugin>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.4</version>
 			</plugin>
 		</plugins>
 	</build>

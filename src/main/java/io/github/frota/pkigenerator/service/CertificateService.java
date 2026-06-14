@@ -52,6 +52,7 @@ public class CertificateService {
 	
 	private static final String BC_PROVIDER = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("ddMMyyyy");
+	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	
 	public CertificateService() {}
 	
@@ -67,7 +68,7 @@ public class CertificateService {
 				.build();
 		
 		X500Principal subject = new X500Principal(name.getEncoded());
-		BigInteger serialNum = new BigInteger(Long.toString(new SecureRandom().nextLong()));
+		BigInteger serialNum = generatePositiveSerialNumber();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusYears(request.getExpirationYears());
 		
@@ -145,7 +146,7 @@ public class CertificateService {
 				.build();
 		
 		X500Principal subject = new X500Principal(name.getEncoded());
-		BigInteger serialNum = new BigInteger(Long.toString(new SecureRandom().nextLong()));
+		BigInteger serialNum = generatePositiveSerialNumber();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusYears(3);
 		
@@ -257,7 +258,7 @@ public class CertificateService {
 				.build();
 		
 		X500Principal subject = new X500Principal(name.getEncoded());
-		BigInteger serialNum = new BigInteger(Long.toString(new SecureRandom().nextLong()));
+		BigInteger serialNum = generatePositiveSerialNumber();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusYears(3);
 		
@@ -347,7 +348,7 @@ public class CertificateService {
 				.build();
 		
 		X500Principal subject = new X500Principal(name.getEncoded());
-		BigInteger serialNum = new BigInteger(Long.toString(new SecureRandom().nextLong()));
+		BigInteger serialNum = generatePositiveSerialNumber();
 		LocalDateTime notBefore = LocalDateTime.now();
 		LocalDateTime notAfter = notBefore.plusYears(3);
 		
@@ -522,7 +523,7 @@ public class CertificateService {
 	}
 	
 	private BigInteger generatePositiveSerialNumber() {
-		return new BigInteger(159, new SecureRandom()).setBit(159);
+		return new BigInteger(159, SECURE_RANDOM).setBit(159);
 	}
 
 }
