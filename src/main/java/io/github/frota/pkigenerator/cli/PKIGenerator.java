@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 
-@Command(name="pki-generator",
+@Command(name="pkigen",
 	version="0.0.1",
 	mixinStandardHelpOptions=true,
 	subcommands={

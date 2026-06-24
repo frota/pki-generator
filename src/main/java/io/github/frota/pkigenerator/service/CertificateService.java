@@ -58,7 +58,7 @@ public class CertificateService {
 	
 	public X509Certificate createCertificateAuthority(KeyPair keyPair, KeyPair singerKeyPair, X500Principal issuer, CARequest request)
 			throws IOException, NoSuchAlgorithmException, OperatorCreationException, CertificateException {
-		// TODO Validar request
+		// TODO Validate request
 		
 		X500Name name = new X500NameBuilder(BCStrictStyle.INSTANCE)
 				.addRDN(BCStyle.C, new DERUTF8String(request.getCountryCode()))
@@ -128,7 +128,7 @@ public class CertificateService {
 	
 	public X509Certificate createIcpBrasilCNPJ(KeyPair keyPair, KeyPair singerKeyPair, X500Principal issuer, ICPBrasilCNPJRequest request)
 			throws IOException, NoSuchAlgorithmException, OperatorCreationException, CertificateException {
-		// TODO Validar e formatar nome
+		// TODO Validate and normalize name
 		
 		final String nome = request.getNome();
 		final String cnpj = request.getCnpj();
@@ -239,7 +239,7 @@ public class CertificateService {
 	
 	public X509Certificate createIcpBrasilCPF(KeyPair keyPair, KeyPair singerKeyPair, X500Principal issuer, ICPBrasilCPFRequest request)
 			throws IOException, NoSuchAlgorithmException, OperatorCreationException, CertificateException {
-		// TODO Validar e formatar nome
+		// TODO Validate and normalize name
 		
 		final String nome = request.getNome();
 		final String cpf = request.getCpf();
@@ -339,7 +339,7 @@ public class CertificateService {
 	
 	public X509Certificate createWebsiteCertificate(KeyPair keyPair, KeyPair singerKeyPair, X500Principal issuer, WebsiteRequest request)
 			throws IOException, NoSuchAlgorithmException, OperatorCreationException, CertificateException {
-		// TODO Validar e formatar nome
+		// TODO Validate and normalize name
 		
 		final String commonName = request.getCommonName();
 		
